@@ -1,0 +1,795 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>HarveyMed X Doctordle</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one ward-chart sheet. Clues stack as chart entries, the guess meter is a row of pulse traces. */
+:root{
+  --bg:#E7EEED; --surface:#F6FAF9; --ink:#0F1C1B; --muted:#53696A; --line:#C3D2D0;
+  --accent:#0C5C58; --on-accent:#FFFFFF; --sel:#D8E8E6; --scrim:rgba(10,20,19,.55);
+  --ok:#146B41; --ok-bg:#DCEFE4; --near:#7F520A; --near-bg:#F6E7C9; --bad:#A7342B; --bad-bg:#F6DEDA;
+  --f-display:'Bricolage Grotesque','Avenir Next','Segoe UI',system-ui,sans-serif;
+  --f-body:'Source Serif 4',Georgia,'Times New Roman',serif;
+  --f-mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D1514; --surface:#152120; --ink:#E2EDEB; --muted:#8FA3A0; --line:#27393A;
+    --accent:#5CC6BB; --on-accent:#06201D; --sel:#1F3836; --scrim:rgba(0,0,0,.65);
+    --ok:#5FD39B; --ok-bg:#12301F; --near:#EDB35A; --near-bg:#3A2A0E; --bad:#F0867B; --bad-bg:#3B1A17;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D1514; --surface:#152120; --ink:#E2EDEB; --muted:#8FA3A0; --line:#27393A;
+  --accent:#5CC6BB; --on-accent:#06201D; --sel:#1F3836; --scrim:rgba(0,0,0,.65);
+  --ok:#5FD39B; --ok-bg:#12301F; --near:#EDB35A; --near-bg:#3A2A0E; --bad:#F0867B; --bad-bg:#3B1A17;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--f-body); font-size:16px; line-height:1.5;
+  padding-block:20px 40px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{max-width:720px;margin:0 auto}
+button{font:inherit;color:inherit}
+
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;margin-bottom:18px}
+.brand{min-width:0}
+.brand h1{font-family:var(--f-display);font-weight:800;font-size:2.4rem;line-height:1;letter-spacing:-.035em;margin:0 0 6px;text-wrap:balance}
+.brand p{margin:0;color:var(--muted);font-size:.95rem;max-width:34ch}
+.tools{display:flex;flex-wrap:wrap;gap:8px}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;
+  font-family:var(--f-mono);font-size:.78rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  padding:9px 14px;border:1px solid var(--ink);background:transparent;border-radius:4px;
+}
+.btn:hover{background:var(--sel)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{border-color:var(--line)}
+
+.sheet{background:var(--surface);border:1px solid var(--line);border-radius:6px}
+.sheet-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.meta{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.meta strong{color:var(--ink);font-weight:600}
+.meta button{background:none;border:0;padding:0;margin-left:10px;color:var(--accent);text-decoration:underline;cursor:pointer;font:inherit;text-transform:inherit;letter-spacing:inherit}
+.meter{display:flex;gap:4px}
+.beat{width:34px;height:20px;display:block}
+.beat path{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.beat.s-idle{color:var(--line)}
+.beat.s-ok{color:var(--ok)}
+.beat.s-near{color:var(--near)}
+.beat.s-no{color:var(--bad)}
+.beat.s-skip{color:var(--muted)}
+
+.clues{list-style:none;margin:0;padding:0}
+.clue{display:grid;grid-template-columns:7.5rem minmax(0,1fr);gap:4px 16px;padding:14px 18px;border-top:1px solid var(--line)}
+.clue:first-child{border-top:0}
+.clue .k{font-family:var(--f-mono);font-size:.7rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);padding-top:.4rem}
+.clue .t{margin:0;font-size:1.08rem;line-height:1.5;min-width:0}
+.clue.new{animation:in .4s ease-out both}
+.clue.locked{border-top:1px dashed var(--line);color:var(--muted)}
+.clue.locked .t{font-size:.95rem;font-style:italic}
+.clue.unused{opacity:.62}
+.clue.unused .k::after{content:" · not needed";text-transform:none;letter-spacing:0}
+.clue.more{padding-block:10px}
+.clue.more .t{font-size:.9rem;font-style:italic;color:var(--muted)}
+@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+.guesses{margin:0;padding:12px 18px 14px;border-top:1px solid var(--line);list-style:none;display:grid;gap:6px}
+.chip{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:8px 12px;border:1px solid;border-radius:4px;min-width:0}
+.chip .sym{font-family:var(--f-mono);font-weight:600;width:1.2em}
+.chip .nm{flex:1 1 12rem;min-width:0}
+.chip .gp{font-family:var(--f-mono);font-size:.68rem;letter-spacing:.07em;text-transform:uppercase}
+.chip.f-ok{color:var(--ok);background:var(--ok-bg);border-color:var(--ok)}
+.chip.f-near{color:var(--near);background:var(--near-bg);border-color:var(--near)}
+.chip.f-no{color:var(--bad);background:var(--bad-bg);border-color:var(--bad)}
+.chip.f-skip{color:var(--muted);background:var(--bg);border-color:var(--line)}
+.hint{margin:8px 0 0;font-size:.85rem;color:var(--muted)}
+
+.ask{padding:14px 18px 18px;border-top:1px solid var(--line)}
+.lab{display:block;font-family:var(--f-mono);font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.row{display:flex;gap:8px;align-items:stretch}
+.combo{position:relative;flex:1;min-width:0}
+.combo input{width:100%;font:inherit;font-size:1.05rem;padding:10px 12px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px}
+.combo input::placeholder{color:var(--muted)}
+.sugg{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:5;margin:0;padding:4px;list-style:none;max-height:16rem;overflow:auto;background:var(--surface);border:1px solid var(--ink);border-radius:4px}
+.sugg li{padding:9px 10px;cursor:pointer;border-radius:3px}
+.sugg li[aria-selected="true"]{background:var(--sel)}
+.sugg .via{margin-left:8px;font-family:var(--f-mono);font-size:.7rem;color:var(--muted)}
+.msg{min-height:1.3em;margin:8px 0 0;font-size:.9rem;color:var(--bad)}
+
+.result{padding:20px 18px 22px;border-top:1px solid var(--line)}
+.verdict{display:inline-block;margin:0 0 8px;padding:3px 8px;border-radius:3px;font-family:var(--f-mono);font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+.verdict.win{color:var(--ok);background:var(--ok-bg)}
+.verdict.lose{color:var(--bad);background:var(--bad-bg)}
+.result h2{font-family:var(--f-display);font-weight:800;font-size:2rem;line-height:1.1;letter-spacing:-.025em;margin:0 0 4px;text-wrap:balance}
+.srcline{margin:0 0 14px;font-family:var(--f-mono);font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.why{margin:0 0 14px;max-width:62ch}
+.alt{margin:0 0 14px;color:var(--muted);font-size:.95rem;max-width:62ch}
+.trap{margin:0 0 18px;padding:12px 14px;border:1px solid var(--near);background:var(--near-bg);color:var(--near);border-radius:4px;max-width:62ch}
+.trap span{display:block;font-family:var(--f-mono);font-size:.7rem;letter-spacing:.09em;text-transform:uppercase;font-weight:600;margin-bottom:2px}
+.acts{display:flex;flex-wrap:wrap;gap:8px}
+.cd{margin:14px 0 0;font-family:var(--f-mono);font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.sharebox{margin-top:12px}
+.sharebox textarea{width:100%;font-family:var(--f-mono);font-size:.9rem;padding:10px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:4px;resize:none}
+
+.foot{margin:18px 2px 0;font-family:var(--f-mono);font-size:.7rem;line-height:1.6;color:var(--muted);max-width:70ch}
+
+.overlay{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:var(--scrim);
+  padding-block:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.panel{width:100%;max-width:540px;max-height:100%;overflow:auto;background:var(--surface);border:1px solid var(--ink);border-radius:6px;padding:18px}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.ph h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:1.5rem;letter-spacing:-.02em}
+.panel p{margin:0 0 12px}
+.panel ol{margin:0 0 12px;padding-left:1.2rem;display:grid;gap:6px}
+.nums{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:18px}
+.nums div{text-align:left}
+.nums b{display:block;font-family:var(--f-display);font-weight:800;font-size:2rem;line-height:1;font-variant-numeric:tabular-nums}
+.nums span{font-family:var(--f-mono);font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.dist{display:grid;gap:5px}
+.dist div{display:grid;grid-template-columns:3.2rem minmax(0,1fr) 2rem;gap:8px;align-items:center;font-family:var(--f-mono);font-size:.78rem}
+.dist i{display:block;height:16px;background:var(--accent);min-width:2px;border-radius:2px}
+.dist i.miss{background:var(--bad)}
+.dist em{font-style:normal;text-align:right;font-variant-numeric:tabular-nums}
+.lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(125px,1fr));gap:8px;margin:12px 0 16px}
+.libcard{cursor:pointer;text-align:left;display:grid;gap:2px;padding:10px 12px;background:var(--bg);border:1px solid var(--line);border-radius:4px}
+.libcard:hover{border-color:var(--ink)}
+.libcard .no{font-family:var(--f-display);font-weight:800;font-size:1.15rem}
+.libcard .stt{font-family:var(--f-mono);font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.libcard.won{border-color:var(--ok)} .libcard.won .stt{color:var(--ok)}
+.libcard.lost{border-color:var(--bad)} .libcard.lost .stt{color:var(--bad)}
+.libcard.part .stt{color:var(--near)}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:30;padding:9px 14px;background:var(--ink);color:var(--bg);border-radius:4px;font-family:var(--f-mono);font-size:.78rem}
+
+@media (max-width:520px){
+  .brand h1{font-size:2rem}
+  .clue{grid-template-columns:minmax(0,1fr)}
+  .clue .k{padding-top:0}
+  .nums{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (prefers-reduced-motion: reduce){
+  .clue.new{animation:none}
+}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>HarveyMed X Doctordle</h1>
+      <p>One diagnosis a day, built from the HarveyMed case summaries.</p>
+    </div>
+    <nav class="tools" aria-label="Game menu">
+      <button class="btn ghost" type="button" data-act="cases">Cases</button>
+      <button class="btn ghost" type="button" data-act="stats">Stats</button>
+      <button class="btn ghost" type="button" data-act="help">How to play</button>
+    </nav>
+  </header>
+
+  <main id="game"></main>
+
+  <p class="foot">Built by Michalis Christoforou based on the HarveyMed Summaries. For study only, not medical advice. Your results are saved in this browser only.</p>
+</div>
+
+<div class="overlay" id="ov" hidden>
+  <div class="panel" id="panel" role="dialog" aria-modal="true" aria-labelledby="ov-title" tabindex="-1">
+    <div class="ph"><h2 id="ov-title"></h2><button class="btn ghost" type="button" data-act="close">Close</button></div>
+    <div id="ov-body"></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+const GROUPS = {pb:"Pancreatobiliary", cv:"Cardiovascular", ug:"Upper GI", lg:"Lower GI", gy:"Gynaecological", ur:"Urological", bl:"Blood & liver"};
+const DX = [
+  {id:"ami", n:"Acute myocardial infarction", g:"cv", a:["AMI","MI","myocardial infarction","heart attack","STEMI","NSTEMI","acute coronary syndrome"]},
+  {id:"dissect", n:"Aortic dissection", g:"cv", a:["dissection"]},
+  {id:"aaa", n:"Ruptured abdominal aortic aneurysm", g:"cv", a:["ruptured AAA","AAA","abdominal aortic aneurysm","aortic aneurysm"]},
+  {id:"gerd", n:"GERD", g:"ug", a:["gastro-oesophageal reflux disease","gastroesophageal reflux","reflux","acid reflux"]},
+  {id:"ppu", n:"Perforated peptic ulcer", g:"ug", a:["peptic ulcer","perforated ulcer","peptic ulcer perforation"]},
+  {id:"boer", n:"Boerhaave syndrome", g:"ug", a:["Boerhaave","oesophageal perforation","esophageal rupture","oesophageal rupture"]},
+  {id:"pancreatitis", n:"Acute pancreatitis", g:"pb", a:["pancreatitis"]},
+  {id:"pdac", n:"Pancreatic ductal adenocarcinoma", g:"pb", a:["pancreatic cancer","PDAC","pancreatic adenocarcinoma","cancer of the head of the pancreas","pancreatic head cancer","head of pancreas cancer"]},
+  {id:"biliary", n:"Biliary colic / cholecystitis", g:"pb", a:["biliary colic","cholecystitis","acute cholecystitis","gallstones","gallstone disease"]},
+  {id:"periamp", n:"Peri-ampullary neoplasm", g:"pb", a:["periampullary cancer","peri-ampullary cancer","ampullary cancer","periampullary neoplasm"]},
+  {id:"cbd", n:"CBD stones", g:"pb", a:["choledocholithiasis","common bile duct stones","cholangitis","ascending cholangitis"]},
+  {id:"mirizzi", n:"Mirizzi syndrome", g:"pb", a:["Mirizzi"]},
+  {id:"klatskin", n:"Klatskin tumour", g:"pb", a:["Klatskin tumor","hilar cholangiocarcinoma","cholangiocarcinoma","perihilar cholangiocarcinoma"]},
+  {id:"cbdca", n:"Cancer of the common bile duct", g:"pb", a:["CBD cancer","cancer of the choledochus","distal cholangiocarcinoma","bile duct cancer"]},
+  {id:"gbca", n:"Gallbladder cancer", g:"pb", a:["carcinoma of the gallbladder","gallbladder carcinoma"]},
+  {id:"psc", n:"Primary sclerosing cholangitis", g:"pb", a:["PSC","biliary stricture","iatrogenic stricture"]},
+  {id:"hydatid", n:"Echinococcosis", g:"pb", a:["hydatid disease","hydatid cyst","echinococcus"]},
+  {id:"fluke", n:"Opisthorchis infestation", g:"pb", a:["Opisthorchis felineus","liver fluke","parasitic worms","opisthorchiasis"]},
+  {id:"mets", n:"Metastatic lymph nodes", g:"pb", a:["nodal metastases","recurrent gastric cancer","lymph node metastasis"]},
+  {id:"livermets", n:"Liver metastases", g:"pb", a:["hepatic metastases","liver secondaries"]},
+  {id:"net", n:"Pancreatic neuroendocrine tumour", g:"pb", a:["pancreatic NET","NET","neuroendocrine tumour","neuroendocrine tumor","insulinoma"]},
+  {id:"uncinate", n:"Uncinate process cancer", g:"pb", a:["uncinate process tumour","uncinate cancer"]},
+  {id:"appy", n:"Acute appendicitis", g:"lg", a:["appendicitis"]},
+  {id:"mesenteric", n:"Acute mesenteric ischaemia", g:"lg", a:["mesenteric ischemia","mesenteric infarction"]},
+  {id:"crohn", n:"Crohn’s disease", g:"lg", a:["Crohn","Crohns","Crohn disease","inflammatory bowel disease","IBD"]},
+  {id:"meckel", n:"Meckel’s diverticulum", g:"lg", a:["Meckel","Meckels diverticulum"]},
+  {id:"ectopic", n:"Ruptured ectopic pregnancy", g:"gy", a:["ectopic pregnancy","ectopic"]},
+  {id:"pid", n:"Pelvic inflammatory disease", g:"gy", a:["PID"]},
+  {id:"torsion", n:"Ovarian torsion", g:"gy", a:["torsion","adnexal torsion"]},
+  {id:"endo", n:"Endometriosis", g:"gy", a:[]},
+  {id:"cl", n:"Corpus luteum cyst", g:"gy", a:["luteal cyst"]},
+  {id:"follic", n:"Follicular cyst (Mittelschmerz)", g:"gy", a:["Mittelschmerz","follicular cyst","ovulation pain"]},
+  {id:"stone", n:"Ureteric colic", g:"ur", a:["ureteric stone","ureteral stone","renal colic","kidney stone","ureteric calculus"]},
+  {id:"hepatitis", n:"Hepatitis", g:"bl", a:["viral hepatitis","hepatic jaundice","acute hepatitis"]},
+  {id:"hemolysis", n:"Haemolytic anaemia", g:"bl", a:["hemolytic anemia","haemolysis","hemolysis"]},
+  {id:"lymphoma", n:"Lymphoma", g:"bl", a:["lymph node lymphoma"]},
+  {id:"gist", n:"GIST", g:"ug", a:["gastrointestinal stromal tumour","gastrointestinal stromal tumor","stromal tumour","stromal tumor"]},
+  {id:"gastca", n:"Gastric cancer", g:"ug", a:["stomach cancer","gastric carcinoma","gastric adenocarcinoma"]},
+  {id:"mw", n:"Mallory-Weiss tear", g:"ug", a:["Mallory Weiss","Mallory-Weiss syndrome"]},
+  {id:"varices", n:"Oesophageal varices", g:"ug", a:["esophageal varices","variceal bleeding","bleeding varices","varices"]},
+  {id:"pud", n:"Bleeding peptic ulcer", g:"ug", a:["peptic ulcer disease","bleeding ulcer","duodenal ulcer","gastric ulcer","PUD"]},
+  {id:"dieulafoy", n:"Dieulafoy lesion", g:"ug", a:["Dieulafoy"]},
+  {id:"duoneo", n:"Duodenal neoplasm", g:"ug", a:["duodenal tumour","duodenal cancer"]},
+  {id:"oesca", n:"Oesophageal cancer", g:"ug", a:["esophageal cancer","oesophageal tumour","esophageal tumor"]},
+  {id:"oesoph", n:"Oesophagitis", g:"ug", a:["esophagitis"]},
+  {id:"haemobilia", n:"Haemobilia", g:"pb", a:["hemobilia"]},
+  {id:"colca", n:"Colon cancer", g:"lg", a:["obstructing colon cancer","colorectal cancer","colorectal carcinoma","colon carcinoma","bowel cancer","large bowel cancer","left-sided colon cancer","splenic flexure cancer"]},
+  {id:"volvulus", n:"Sigmoid volvulus", g:"lg", a:["volvulus","colonic volvulus"]},
+  {id:"divert", n:"Diverticulitis", g:"lg", a:["diverticular disease","complicated diverticulitis"]},
+  {id:"sbo", n:"Small bowel obstruction", g:"lg", a:["SBO","adhesions","adhesive obstruction"]},
+  {id:"ileus", n:"Functional obstruction", g:"lg", a:["paralytic ileus","ileus","pseudo-obstruction","Ogilvie syndrome"]},
+  {id:"ischcol", n:"Ischaemic colitis", g:"lg", a:["ischemic colitis","bowel ischaemia","ischaemic bowel"]}
+];
+const byId = Object.fromEntries(DX.map(d => [d.id, d]));
+
+const PUZ = [
+ {
+  "a": "pdac",
+  "src": "Case 1: Epigastric Pain",
+  "c": [
+   [
+    "Presentation",
+    "A 54-year-old man comes to the clinic with epigastric pain that has lasted a few weeks. He has no fever and his vital signs are normal. The abdomen is soft, with mild tenderness in the epigastrium."
+   ],
+   [
+    "History",
+    "He has lost weight fast: about 10 kg in 3 months."
+   ],
+   [
+    "Stools",
+    "His stools have turned clay-coloured, almost whitish. Bile is not reaching the gut."
+   ],
+   [
+    "Stools",
+    "They also float, smell foul and look sticky."
+   ],
+   [
+    "Mechanism",
+    "The main duct is blocked, so enzymes cannot reach the gut and fat is not digested."
+   ],
+   [
+    "Epidemiology",
+    "This is the type behind about 90% of cancers of this organ."
+   ]
+  ],
+  "why": "Pancreatic ductal adenocarcinoma accounts for about 90% of pancreatic cancers. Duct obstruction gives steatorrhoea, rapid weight loss (for example 10 kg in 3 months) and clay-coloured stools. It rarely announces itself, so the diagnosis comes from targeted questions about stools and weight.",
+  "trap": "Patients won’t say “I have cancer”. You have to ask the right questions."
+ },
+ {
+  "a": "appy",
+  "src": "Case 2: Right Iliac Fossa Pain",
+  "c": [
+   [
+    "Presentation",
+    "A 22-year-old man presents with right iliac fossa pain that started about a day ago. His vital signs are normal and the abdomen is tender on the right."
+   ],
+   [
+    "History",
+    "It started around the umbilicus."
+   ],
+   [
+    "Course",
+    "Then the pain moved to the right iliac fossa."
+   ],
+   [
+    "Work-up",
+    "The blood count shows inflammation. You skip the urinalysis because urinary disease is unlikely."
+   ],
+   [
+    "Imaging",
+    "Ultrasound is the first imaging test. CT is kept for an inconclusive scan, for example in an obese patient."
+   ],
+   [
+    "Mechanism",
+    "Inflammation spreads outwards through the wall: poorly localised visceral pain becomes well-localised parietal pain once the serosa is reached."
+   ]
+  ],
+  "why": "The pain starts periumbilical (visceral, from the inner mucosa and submucosa) and localises once the serosa is involved (parietal). In about 10 to 20% of patients the anatomy varies, so the pain localises wherever the appendix lies.",
+  "trap": "In a young woman with RIF pain, do the pregnancy test and rule out the gynaecological must-not-miss diagnoses before settling on a GI cause."
+ },
+ {
+  "a": "periamp",
+  "alt": [
+   "pdac"
+  ],
+  "src": "Case 3: Jaundice",
+  "c": [
+   [
+    "Presentation",
+    "A 68-year-old man attends the outpatient clinic because a relative noticed that his eyes have turned yellow over the last few weeks."
+   ],
+   [
+    "Pain and fever",
+    "He has no abdominal pain and no fever."
+   ],
+   [
+    "Weight",
+    "He has lost 5 kg in 6 months."
+   ],
+   [
+    "Stools",
+    "His stools are clay-coloured (acholia)."
+   ],
+   [
+    "Exam",
+    "There is a dull, round, painless mass in the right hypochondrium that moves with deep inspiration."
+   ],
+   [
+    "Sign",
+    "It is a distended gallbladder fundus: the Courvoisier-Terrier sign. In an older patient, the average age at diagnosis of the commonest cancer here is 64."
+   ]
+  ],
+  "why": "Painless obstructive jaundice with weight loss, acholic stools and a palpable painless gallbladder (Courvoisier-Terrier sign) points to a peri-ampullary neoplasm: head of the pancreas, distal CBD, ampulla of Vater or duodenum. Most often it is cancer of the head of the pancreas. Stones would cause Charcot’s triad instead.",
+  "trap": "The Courvoisier sign needs a normal, extensible gallbladder. A scarred gallbladder from previous cholecystitis cannot distend."
+ },
+ {
+  "a": "gist",
+  "src": "Case 4: Upper GI Bleeding",
+  "c": [
+   [
+    "Presentation",
+    "A 64-year-old man presents to the emergency department after vomiting blood."
+   ],
+   [
+    "Haematemesis",
+    "The blood is fresh and comes with clots. The bleeding is above the ligament of Treitz, the duodeno-jejunal transition."
+   ],
+   [
+    "Stability",
+    "Serial measurements show he is haemodynamically unstable, so he goes straight to emergency endoscopy."
+   ],
+   [
+    "Endoscopy",
+    "It shows a ball-shaped mass covered by fibrin and clots. This is the bleeding site, and it has ulcerated."
+   ],
+   [
+    "Origin",
+    "The mass comes from the interstitial cells of Cajal. It can grow outwards or inwards and does not typically affect the mucosa."
+   ],
+   [
+    "Confirmation",
+    "Immunohistochemistry for CD117 (c-KIT) confirms the diagnosis. Size and mitotic count tell you how malignant it is."
+   ]
+  ],
+  "why": "A GIST derives from the interstitial cells of Cajal and can grow outwards (exophytic) or inwards (endophytic) without typically affecting the mucosa. When it ulcerates it bleeds, as here. Biopsy must be EUS-guided, confirmed with CD117 (c-KIT), and size over 6 cm or a high mitotic count signals malignancy. An isolated tumour needs only a wedge resection with about a 1 cm margin and no lymphadenectomy. Imatinib is for metastatic disease, tumours over 6 cm or those needing extensive resection.",
+  "trap": "Percutaneous (CT-guided) biopsy is contraindicated because of the risk of seeding, and a conventional mucosal biopsy misses a submucosal mass. Use EUS-guided biopsy."
+ },
+ {
+  "a": "colca",
+  "src": "Case 5: Intestinal Obstruction",
+  "c": [
+   [
+    "Presentation",
+    "A woman presents with abdominal distension. She has passed no gas and no stools for 3 days."
+   ],
+   [
+    "Vomiting",
+    "She has not vomited. She is dehydrated."
+   ],
+   [
+    "Level",
+    "The distension reaches the epigastrium, so the obstruction lies between the transverse and descending colon."
+   ],
+   [
+    "General",
+    "She has some anaemia and has lost weight."
+   ],
+   [
+    "Bowel habit",
+    "Her bowel habit has changed, with alternating constipation and diarrhoea and mucus in the stools. Stretching of the colon triggers fluid and mucus secretion that passes the stricture."
+   ],
+   [
+    "Imaging",
+    "CT shows a markedly distended ascending and transverse colon and an enhancing lesion at the splenic flexure."
+   ]
+  ],
+  "why": "A left-sided colon cancer at the splenic flexure causes a mechanical large bowel obstruction. Weight loss, change in bowel habit and pseudodiarrhoea with mucus point to cancer, and CT confirms it. A competent ileocaecal valve creates a closed loop: no vomiting, progressive distension and a risk of caecal rupture (Laplace’s law, the caecum has the thinnest wall and largest diameter). Treat urgently with fluids and an endoscopic stent, with biopsy taken meanwhile. If the stent fails, an extended right hemicolectomy with side-to-side anastomosis between the small bowel and the sigmoid.",
+  "trap": "Gastrografin helps in small bowel obstruction, but not here: in a mechanical, closed-loop obstruction you don’t want to stimulate peristalsis."
+ }
+];
+const ORDER = [0,1,2,3,4];
+/*END DATA*/
+
+(function(){
+  var $ = function(s){ return document.querySelector(s); };
+  var pad = function(n){ return String(n).padStart(2,"0"); };
+  var esc = function(s){ return String(s).replace(/[&<>"]/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); };
+
+  var KEY = "ward-round-v2";
+  var mem = {games:{}};
+  function load(){
+    try{
+      var r = localStorage.getItem(KEY);
+      if(r){ var o = JSON.parse(r); if(o && o.games) return o; }
+    }catch(e){}
+    return mem;
+  }
+  var store = load();
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
+
+  /* ---------- dates ---------- */
+  var LAUNCH = "2026-10-24";
+  function dstr(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+  function utc(s){ var p = s.split("-").map(Number); return Date.UTC(p[0],p[1]-1,p[2]); }
+  function dailyNo(ds){ return Math.max(0, Math.round((utc(ds)-utc(LAUNCH))/864e5)) + 1; }
+  function dailyIdx(ds){ return ORDER[(dailyNo(ds)-1) % ORDER.length]; }
+  function fmtDate(ds){
+    var p = ds.split("-").map(Number);
+    return new Date(p[0],p[1]-1,p[2]).toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"});
+  }
+
+  /* ---------- matching ---------- */
+  function norm(s){
+    return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[’‘`']/g,"").replace(/[^a-z0-9]+/g," ").trim();
+  }
+  var TERMS = [];
+  DX.forEach(function(d){
+    [d.n].concat(d.a).forEach(function(t,i){ TERMS.push({id:d.id, t:t, k:norm(t), name:i===0}); });
+  });
+  function suggest(q){
+    var nq = norm(q);
+    if(!nq) return [];
+    var toks = nq.split(" ");
+    var best = {};
+    TERMS.forEach(function(x){
+      if(!toks.every(function(tk){ return x.k.indexOf(tk) !== -1; })) return;
+      var rank = x.k === nq ? 0 : x.k.indexOf(nq) === 0 ? 1 : 2;
+      if(!x.name) rank += 0.5;
+      if(!best[x.id] || rank < best[x.id].rank) best[x.id] = {id:x.id, n:byId[x.id].n, via:x.name?"":x.t, rank:rank};
+    });
+    return Object.keys(best).map(function(k){ return best[k]; }).sort(function(a,b){ return a.rank-b.rank || a.n.localeCompare(b.n); }).slice(0,8);
+  }
+  function resolve(text){
+    var nq = norm(text);
+    if(!nq) return null;
+    for(var i=0;i<TERMS.length;i++){ if(TERMS[i].k === nq) return TERMS[i].id; }
+    var s = suggest(text);
+    return s.length === 1 ? s[0].id : null;
+  }
+
+  /* ---------- game logic ---------- */
+  function openN(p){ return 1; }
+  function maxG(p){ return p.c.length - openN(p) + 1; }
+  function isOk(p,id){ return id === p.a || (p.alt||[]).indexOf(id) !== -1; }
+  function fb(p,id){
+    if(id === "_skip") return "skip";
+    if(isOk(p,id)) return "ok";
+    if(byId[id].g === byId[p.a].g || (p.close||[]).indexOf(id) !== -1) return "near";
+    return "no";
+  }
+  function status(g){
+    var p = PUZ[g.p];
+    if(!p) return {won:false, over:false};
+    var won = g.g.some(function(id){ return isOk(p,id); });
+    return {won:won, over: won || g.g.length >= maxG(p)};
+  }
+  var mode;
+  function startDaily(){
+    var ds = dstr(new Date());
+    mode = {type:"daily", key:"d:"+ds, pidx:dailyIdx(ds), no:dailyNo(ds), date:ds};
+  }
+  function startLib(i){ mode = {type:"lib", key:"p:"+i, pidx:i}; }
+  function game(){
+    var g = store.games[mode.key];
+    if(!g){ g = store.games[mode.key] = {g:[], p:mode.pidx}; }
+    return g;
+  }
+  var animateNew = false;
+
+  /* ---------- rendering ---------- */
+  var BEAT = "M1 14H9L12 14L15 3L19 18L22 14H33";
+  var FLAT = "M1 14H33";
+  function pulse(state){
+    return '<svg class="beat s-'+state+'" viewBox="0 0 34 20" aria-hidden="true"><path d="'+(state==="no"||state==="skip"?FLAT:BEAT)+'"/></svg>';
+  }
+
+  function render(){
+    var gm = game(), p = PUZ[gm.p], max = p.c.length, gmax = maxG(p), st = status(gm);
+    var used = gm.g.length;
+    var seen = st.won ? used + openN(p) - 1 : Math.min(used + openN(p), max);
+
+    var meter = "";
+    for(var i=0;i<gmax;i++){
+      meter += pulse(i < used ? fb(p, gm.g[i]) : "idle");
+    }
+    var head = mode.type === "daily"
+      ? "<strong>Daily Nº "+mode.no+"</strong> · "+esc(fmtDate(mode.date))
+      : "<strong>Case file Nº "+pad(gm.p+1)+"</strong><button type=\"button\" data-act=\"today\">Today’s case</button>";
+
+    var clues = "";
+    for(var j=0;j<max;j++){
+      var k = esc(p.c[j][0]), t = esc(p.c[j][1]);
+      if(j < seen){
+        clues += '<li class="clue'+(animateNew && !st.over && j===seen-1 ? " new":"")+'"><span class="k">'+k+'</span><p class="t">'+t+'</p></li>';
+      } else if(st.over){
+        clues += '<li class="clue unused"><span class="k">'+k+'</span><p class="t">'+t+'</p></li>';
+      } else if(j === seen){
+        clues += '<li class="clue locked"><span class="k">Clue '+(j+1)+'</span><p class="t">Unlocks after a wrong guess.</p></li>';
+      } else if(j === seen+1){
+        var left = max - seen - 1;
+        clues += '<li class="clue more"><span class="k"></span><p class="t">'+left+' more clue'+(left===1?"":"s")+' after that.</p></li>';
+      }
+    }
+
+    var chips = gm.g.map(function(id){
+      var f = fb(p,id);
+      if(f === "skip"){
+        return '<li class="chip f-skip"><span class="sym" aria-hidden="true">→</span><span class="nm">Skipped</span><span class="gp">Next clue unlocked</span></li>';
+      }
+      var d = byId[id];
+      var sym = f==="ok" ? "✓" : f==="near" ? "≈" : "✗";
+      var lab = f==="ok" ? "Correct" : f==="near" ? "Same system" : "Different";
+      return '<li class="chip f-'+f+'"><span class="sym" aria-hidden="true">'+sym+'</span><span class="nm">'+esc(d.n)+'</span><span class="gp">'+lab+" · "+esc(GROUPS[d.g])+'</span></li>';
+    }).join("");
+
+    var bottom;
+    if(st.over){
+      bottom = resultHTML(p, gm, st);
+    } else {
+      bottom =
+        '<form class="ask" id="ask" autocomplete="off">'+
+          '<label class="lab" for="dx">Guess '+(used+1)+' of '+gmax+' · your diagnosis</label>'+
+          '<div class="row">'+
+            '<div class="combo">'+
+              '<input id="dx" type="text" role="combobox" aria-expanded="false" aria-controls="dx-list" aria-autocomplete="list" placeholder="Start typing a diagnosis" autocapitalize="off" spellcheck="false">'+
+              '<ul id="dx-list" class="sugg" role="listbox" hidden></ul>'+
+            '</div>'+
+            '<button class="btn primary" type="submit">Submit</button>'+
+          '</div>'+
+          '<p class="hint">Not sure? Leave the box empty and press Submit to skip to the next clue.</p>'+
+          '<p class="msg" id="msg" role="status" aria-live="polite"></p>'+
+        '</form>';
+    }
+
+    $("#game").innerHTML =
+      '<section class="sheet" aria-label="Clinical case">'+
+        '<div class="sheet-head"><div class="meta">'+head+'</div><div class="meter" role="img" aria-label="'+used+' of '+gmax+' guesses used">'+meter+'</div></div>'+
+        '<ol class="clues">'+clues+'</ol>'+
+        (chips ? '<ul class="guesses" aria-label="Your guesses">'+chips+'</ul>' : "")+
+        bottom+
+      '</section>';
+    animateNew = false;
+    wire();
+    manageCountdown(st.over && mode.type === "daily");
+  }
+
+  function resultHTML(p, gm, st){
+    var d = byId[p.a];
+    var winId = gm.g.filter(function(id){ return isOk(p,id); })[0];
+    var altNote = st.won && winId !== p.a
+      ? '<p class="alt">You answered '+esc(byId[winId].n)+', which this case accepts. The full answer in the notes is '+esc(d.n)+'.</p>' : "";
+    var acts = mode.type === "daily"
+      ? '<button class="btn primary" type="button" data-act="share">Share result</button><button class="btn" type="button" data-act="cases">Play another case</button>'
+      : '<button class="btn primary" type="button" data-act="share">Share result</button><button class="btn" type="button" data-act="next">Next case</button><button class="btn" type="button" data-act="today">Today’s case</button>';
+    return '<section class="result" aria-label="Result">'+
+      '<p class="verdict '+(st.won?"win":"lose")+'">'+(st.won ? "Solved in "+gm.g.length+" of "+maxG(p) : "Not this time")+'</p>'+
+      '<h2>'+esc(d.n)+'</h2>'+
+      '<p class="srcline">From the notes · '+esc(p.src)+'</p>'+
+      altNote+
+      '<p class="why">'+esc(p.why)+'</p>'+
+      '<p class="trap"><span>Exam trap</span>'+esc(p.trap)+'</p>'+
+      '<div class="acts">'+acts+'</div>'+
+      (mode.type === "daily" ? '<p class="cd" id="cd"></p>' : "")+
+      '<div class="sharebox" id="sharebox" hidden><textarea id="sharetext" rows="4" readonly aria-label="Result text to copy"></textarea></div>'+
+    '</section>';
+  }
+
+  /* ---------- combobox ---------- */
+  function wire(){
+    var inp = $("#dx");
+    if(!inp) return;
+    var list = $("#dx-list"), form = $("#ask"), msg = $("#msg");
+    var items = [], act = -1;
+
+    function close(){
+      list.hidden = true; act = -1;
+      inp.setAttribute("aria-expanded","false");
+      inp.removeAttribute("aria-activedescendant");
+    }
+    function paint(){
+      if(!items.length){ close(); return; }
+      list.innerHTML = items.map(function(s,i){
+        return '<li role="option" id="opt-'+i+'" data-id="'+s.id+'" aria-selected="'+(i===act)+'">'+esc(s.n)+(s.via?'<span class="via">'+esc(s.via)+'</span>':"")+'</li>';
+      }).join("");
+      list.hidden = false;
+      inp.setAttribute("aria-expanded","true");
+      if(act >= 0) inp.setAttribute("aria-activedescendant","opt-"+act);
+    }
+    function submit(id){
+      var g = game();
+      if(!id){ msg.textContent = "Pick a diagnosis from the list so the case can be checked."; return; }
+      if(id !== "_skip" && g.g.indexOf(id) !== -1){ msg.textContent = "You already tried that one."; return; }
+      g.g.push(id);
+      animateNew = true;
+      save();
+      render();
+      var again = $("#dx");
+      if(again) again.focus();
+    }
+    inp.addEventListener("input", function(){
+      msg.textContent = "";
+      items = suggest(inp.value);
+      act = items.length ? 0 : -1;
+      paint();
+    });
+    inp.addEventListener("keydown", function(e){
+      if(e.key === "ArrowDown" && items.length){ e.preventDefault(); act = (act+1) % items.length; paint(); }
+      else if(e.key === "ArrowUp" && items.length){ e.preventDefault(); act = (act-1+items.length) % items.length; paint(); }
+      else if(e.key === "Escape"){ close(); }
+    });
+    inp.addEventListener("blur", function(){ setTimeout(close, 120); });
+    list.addEventListener("mousedown", function(e){
+      var li = e.target.closest("li");
+      if(!li) return;
+      e.preventDefault();
+      submit(li.getAttribute("data-id"));
+    });
+    form.addEventListener("submit", function(e){
+      e.preventDefault();
+      if(!inp.value.trim()){ submit("_skip"); return; }
+      var id = (!list.hidden && act >= 0 && items[act]) ? items[act].id : resolve(inp.value);
+      submit(id);
+    });
+  }
+
+  /* ---------- overlays ---------- */
+  var lastFocus = null;
+  function openOv(title, html){
+    lastFocus = document.activeElement;
+    $("#ov-title").textContent = title;
+    $("#ov-body").innerHTML = html;
+    $("#ov").hidden = false;
+    $("#panel").focus();
+  }
+  function closeOv(){
+    $("#ov").hidden = true;
+    if(lastFocus && lastFocus.focus){ try{ lastFocus.focus(); }catch(e){} }
+  }
+  function helpHTML(){
+    return '<p>Each case starts with one clue. Name the diagnosis.</p>'+
+      '<ol>'+
+        '<li>Type a diagnosis and pick it from the list.</li>'+
+        '<li>You start with one detailed presentation that fits more than one disease, so compare the options before you guess. Each wrong guess unlocks the next clue. You get one guess per clue, between 4 and 6.</li>'+
+        '<li>Not sure yet? Press Submit with the box empty to skip. It unlocks the next clue and uses up one guess.</li>'+
+        '<li>Green means correct. Amber means the right system but the wrong disease. Red means a different system.</li>'+
+        '<li>After the case you see the key points and the exam trap from the notes.</li>'+
+      '</ol>'+
+      '<p>A new daily case appears at midnight. The Cases menu lets you play any of the '+PUZ.length+' cases whenever you like.</p>';
+  }
+  function libHTML(){
+    var cards = PUZ.map(function(p,i){
+      var g = store.games["p:"+i], cls = "new", txt = "Not played";
+      if(g){
+        var s = status(g);
+        if(s.won){ cls = "won"; txt = "Solved in "+g.g.length; }
+        else if(s.over){ cls = "lost"; txt = "Missed"; }
+        else if(g.g.length){ cls = "part"; txt = "In progress"; }
+      }
+      return '<button type="button" class="libcard '+cls+'" data-act="lib" data-i="'+i+'"><span class="no">Nº '+pad(i+1)+'</span><span class="stt">'+txt+'</span></button>';
+    }).join("");
+    return '<p>Titles stay hidden until you finish a case.</p><div class="lib">'+cards+'</div><button type="button" class="btn primary" data-act="today">Today’s case</button>';
+  }
+  function statsHTML(){
+    var played = 0, wins = 0, miss = 0, dist = [0,0,0,0,0,0,0], wonDays = {};
+    Object.keys(store.games).forEach(function(k){
+      var g = store.games[k], s = status(g);
+      if(!s.over) return;
+      played++;
+      if(s.won){ wins++; dist[Math.min(g.g.length,6)]++; if(k.indexOf("d:")===0) wonDays[utc(k.slice(2))] = true; }
+      else miss++;
+    });
+    var today = utc(dstr(new Date())), m = wonDays[today] ? today : today-864e5, cur = 0;
+    while(wonDays[m]){ cur++; m -= 864e5; }
+    var days = Object.keys(wonDays).map(Number).sort(function(a,b){ return a-b; }), best = 0, run = 0;
+    days.forEach(function(d,i){
+      run = (i > 0 && d - days[i-1] === 864e5) ? run+1 : 1;
+      if(run > best) best = run;
+    });
+    var peak = Math.max.apply(null, dist.concat([miss, 1]));
+    var rows = "";
+    for(var n=1;n<=6;n++){
+      rows += '<div><span>'+n+' guess'+(n===1?"":"es")+'</span><i style="width:'+Math.round(dist[n]/peak*100)+'%"></i><em>'+dist[n]+'</em></div>';
+    }
+    rows += '<div><span>Missed</span><i class="miss" style="width:'+Math.round(miss/peak*100)+'%"></i><em>'+miss+'</em></div>';
+    return '<div class="nums">'+
+      '<div><b>'+played+'</b><span>Played</span></div>'+
+      '<div><b>'+(played?Math.round(wins/played*100):0)+'%</b><span>Solved</span></div>'+
+      '<div><b>'+cur+'</b><span>Daily streak</span></div>'+
+      '<div><b>'+best+'</b><span>Best streak</span></div>'+
+    '</div><div class="dist">'+rows+'</div>';
+  }
+
+  /* ---------- share, toast, countdown ---------- */
+  var toastT = null;
+  function toast(t){
+    var el = $("#toast");
+    el.textContent = t; el.hidden = false;
+    clearTimeout(toastT);
+    toastT = setTimeout(function(){ el.hidden = true; }, 2200);
+  }
+  function shareText(){
+    var gm = game(), p = PUZ[gm.p], st = status(gm);
+    var sq = gm.g.map(function(id){ return {ok:"🟩", near:"🟨", no:"⬜", skip:"⬛"}[fb(p,id)]; }).join("");
+    var title = mode.type === "daily" ? "HarveyMed X Doctordle Nº "+mode.no : "HarveyMed X Doctordle, case file Nº "+pad(gm.p+1);
+    return title+"\n"+(st.won ? gm.g.length : "X")+"/"+maxG(p)+"\n"+sq;
+  }
+  function doShare(){
+    var txt = shareText();
+    function fallback(){
+      var box = $("#sharebox"), ta = $("#sharetext");
+      if(!box || !ta) return;
+      ta.value = txt; box.hidden = false; ta.focus(); ta.select();
+    }
+    try{
+      navigator.clipboard.writeText(txt).then(function(){ toast("Result copied"); }, fallback);
+    }catch(e){ fallback(); }
+  }
+  var cdT = null;
+  function tickCd(){
+    var el = $("#cd");
+    if(!el){ clearInterval(cdT); cdT = null; return; }
+    var n = new Date(), nx = new Date(n.getFullYear(), n.getMonth(), n.getDate()+1);
+    var s = Math.max(0, Math.floor((nx - n)/1000));
+    el.textContent = "Next daily case in "+pad(Math.floor(s/3600))+":"+pad(Math.floor(s%3600/60))+":"+pad(s%60);
+    if(s === 0){ startDaily(); render(); }
+  }
+  function manageCountdown(on){
+    clearInterval(cdT); cdT = null;
+    if(on){ tickCd(); cdT = setInterval(tickCd, 1000); }
+  }
+
+  /* ---------- events ---------- */
+  function nextCase(){
+    var cur = mode.pidx, n = PUZ.length;
+    for(var step=1; step<=n; step++){
+      var i = (cur+step) % n, g = store.games["p:"+i];
+      if(!g || !status(g).over) return i;
+    }
+    return (cur+1) % n;
+  }
+  document.addEventListener("click", function(e){
+    if(e.target.id === "ov"){ closeOv(); return; }
+    var b = e.target.closest("[data-act]");
+    if(!b) return;
+    var a = b.getAttribute("data-act");
+    if(a === "close"){ closeOv(); }
+    else if(a === "help"){ openOv("How to play", helpHTML()); }
+    else if(a === "stats"){ openOv("Stats", statsHTML()); }
+    else if(a === "cases"){ openOv("Cases", libHTML()); }
+    else if(a === "lib"){ closeOv(); startLib(Number(b.getAttribute("data-i"))); render(); window.scrollTo(0,0); }
+    else if(a === "today"){ if(!$("#ov").hidden) closeOv(); startDaily(); render(); window.scrollTo(0,0); }
+    else if(a === "next"){ startLib(nextCase()); render(); window.scrollTo(0,0); }
+    else if(a === "share"){ doShare(); }
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape" && !$("#ov").hidden) closeOv();
+  });
+
+  startDaily();
+  render();
+})();
+</script>
+
+</body></html>
